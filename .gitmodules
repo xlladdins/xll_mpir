@@ -1,0 +1,6 @@
+[submodule "xll"]
+	path = xll
+	url = https://github.com/xlladdins/xll
+[submodule "mpir"]
+	path = mpir
+	url = https://github.com/BrianGladman/mpir.git

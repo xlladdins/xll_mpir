@@ -188,3 +188,90 @@ public:
 };
 
 //mpz_sizeinbase(mpq_numref(op), base) + mpz_sizeinbase(mpq_denref(op), base) + 3
+
+class mpf {
+	mpf_t f;
+public:
+	mpf()
+	{
+		mpf_init(f);
+	}
+	explicit mpf(int i)
+	{
+		mpf_init_set_si(f, i);
+	}
+	explicit mpf(mpir_ui ui)
+	{
+		mpf_init_set_ui(f, ui);
+	}
+	explicit mpf(mpir_si si)
+	{
+		mpf_init_set_si(f, si);
+	}
+	explicit mpf(double d)
+	{
+		mpf_init_set_d(f, d);
+	}
+	mpf(const char* str, int base)
+	{
+		mpf_init_set_str(f, str, base);
+	}
+	mpf(const mpf& f_)
+	{
+		mpf_init_set(f, f_);
+	}
+	mpf(mpf&& f_) noexcept
+		: mpf()
+	{
+		mpf_swap(f, f_);
+		mpf_clear(f_);
+	}
+	mpf& operator=(const mpf& f_)
+	{
+		if (this != &f_) {
+			mpf_clear(f);
+			mpf_init_set(f, f_);
+		}
+
+		return *this;
+	}
+	mpf& operator=(mpf&& f_) noexcept
+	{
+		if (this != &f_) {
+			mpf_swap(f, f_);
+			mpf_clear(f_);
+		}
+
+		return *this;
+	}
+	~mpf()
+	{
+		mpf_clear(f);
+	}
+	operator mpf_t& ()
+	{
+		return f;
+	}
+	operator const mpf_t& () const
+	{
+		return f;
+	}
+	void swap(mpf& f_)
+	{
+		mpf_swap(f, f_);
+	}
+
+	// spaceship needs some help
+	bool operator==(const mpf& f_) const { return mpf_cmp(f, f_) == 0; }
+	int operator<=>(const mpf& f_) const { return mpf_cmp(f, f_); }
+
+	mpf& operator+=(const mpf& f_) { mpf_add(f, f, f_); return *this; }
+	mpf& operator-=(const mpf& f_) { mpf_sub(f, f, f_); return *this; }
+	mpf& operator*=(const mpf& f_) { mpf_mul(f, f, f_); return *this; }
+	mpf& operator/=(const mpf& f_) { mpf_div(f, f, f_); return *this; }
+};
+
+inline mpf operator+(mpf f, const mpf& f_) { return f += f_; }
+inline mpf operator-(mpf f, const mpf& f_) { return f -= f_; }
+inline mpf operator*(mpf f, const mpf& f_) { return f *= f_; }
+inline mpf operator/(mpf f, const mpf& f_) { return f /= f_; }

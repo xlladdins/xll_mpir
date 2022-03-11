@@ -3,76 +3,58 @@
 
 using namespace xll;
 
-class mpz {
-	mpz_t z;
-public:
-	mpz()
-	{
-		mpz_init(z);
-	}
-	mpz(const char* str, int base)
-		: mpz()
-	{
-		mpz_set_str(z, str, base);
-	}
-	mpz(const mpz& z_)
-		: mpz()
-	{
-		mpz_init_set(z, z_);
-	}
-	mpz& operator=(const mpz& z_)
-	{
-		if (this != &z_) {
-			mpz_clear(z);
-			mpz_init_set(z, z_);
-		}
-
-		return *this;
-	}
-	~mpz()
-	{
-		mpz_clear(z);
-	}
-	operator mpz_t&()
-	{
-		return z;
-	}
-	operator const mpz_t&() const
-	{
-		return z;
-	}
-};
-
-inline OPER4 from_mpz(const mpz_t& z, int base)
+#ifdef _DEBUG
+int test_mpz()
 {
-	OPER4 o;
+	//_crtBreakAlloc = 190;
+	try {
+		{
+			mpz z;
+			ensure(z == z);
+			ensure(!(z != z));
+			ensure(!(z < z));
+			ensure(z <= z);
+			ensure(!(z > z));
+			ensure(z >= z);
 
-	std::string str;
-	size_t n = mpz_sizeinbase(z, base) + 2;
-	str.reserve(n);
-	mpz_get_str(str.data(), base, z);
-	o.resize(static_cast<unsigned>(1 + (n - 1) / 255), 1);
-	for (unsigned i = 0; i < o.rows(); ++i) {
-		int m = n >= 255 ? 255 : static_cast<int>(n);
-		o[i] = OPER4(str.data() + i * 255, m);
-		n -= 255;
-	}
+			mpz z2{ z };
+			ensure(z == z2);
+			z = z2;
+			ensure(z == z2);
 
-	return o;
-}
+			mpir_ui ui = 0;
+			mpz z_ui(ui);
+			ensure(z == z_ui);
 
-inline mpz to_mpz(const OPER4& o, int base)
-{
-	std::string str;
-	for (unsigned i = 0; i < o.size(); ++i) {
-		if (!o[i].is_str()) {
-			return mpz{}; // 0
+			mpir_si si = 0;
+			mpz z_si(si);
+			ensure(z == z_si);
+
+			double d = 0;
+			mpz z_d(d);
+			ensure(z == z_d);
+
+			mpz z_s("0", 10);
+			ensure(z == z_s);
 		}
-		str.append(o[i].val.str + 1, o[i].val.str[0]);
+		{
+			mpz _1(1);
+			mpz _2(2);
+			mpz _3(3);
+			auto z = _1 + _2 * _3;
+			ensure(z == mpz(7));
+		}
+	}
+	catch (const std::exception& ex) {
+		XLL_ERROR(ex.what());
+
+		return -1;
 	}
 
-	return mpz(str.c_str(), base);
+	return 0;
 }
+int mpz_test = test_mpz();
+#endif // _DEBUG
 
 AddIn xai_mpz_(
 	Function(XLL_HANDLEX, "xll_mpz_", "\\MPZ")

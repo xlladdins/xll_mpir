@@ -32,3 +32,4 @@
 *.app
 /.vs/xll_mpir/v17
 /x64/Debug
+/Debug

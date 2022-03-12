@@ -4,12 +4,13 @@
 using namespace xll;
 
 #ifdef _DEBUG
-int test_mpz()
+template<class MPX>
+int test_mp()
 {
 	//_crtBreakAlloc = 190;
 	try {
 		{
-			mpz z;
+			MPX z;
 			ensure(z == z);
 			ensure(!(z != z));
 			ensure(!(z < z));
@@ -17,32 +18,32 @@ int test_mpz()
 			ensure(!(z > z));
 			ensure(z >= z);
 
-			mpz z2{ z };
+			MPX z2{ z };
 			ensure(z == z2);
 			z = z2;
 			ensure(z == z2);
 
 			mpir_ui ui = 0;
-			mpz z_ui(ui);
+			MPX z_ui(ui);
 			ensure(z == z_ui);
 
 			mpir_si si = 0;
-			mpz z_si(si);
+			MPX z_si(si);
 			ensure(z == z_si);
 
 			double d = 0;
-			mpz z_d(d);
+			MPX z_d(d);
 			ensure(z == z_d);
 
-			mpz z_s("0", 10);
+			MPX z_s("0", 10);
 			ensure(z == z_s);
 		}
 		{
-			mpz _1(1);
-			mpz _2(2);
-			mpz _3(3);
+			MPX _1(1);
+			MPX _2(2);
+			MPX _3(3);
 			auto z = _1 + _2 * _3;
-			ensure(z == mpz(7));
+			ensure(z == MPX(7));
 		}
 	}
 	catch (const std::exception& ex) {
@@ -53,14 +54,54 @@ int test_mpz()
 
 	return 0;
 }
-int mpz_test = test_mpz();
+int mpz_test = test_mp<mpz>();
 #endif // _DEBUG
+
+AddIn xai_string_(
+	Function(XLL_HANDLEX, "xll_string_", "\\STRING")
+	.Arguments({ Arg(XLL_LPOPER4, "string", "is a string.") })
+	.Uncalced()
+	.FunctionHelp("Return a handle to a string.")
+	.Category(CATEGORY)
+);
+HANDLEX WINAPI xll_string_(LPOPER4 po)
+{
+#pragma XLLEXPORT
+	handle<std::string> h(new std::string(to_string(*po)));
+
+	return h.get();
+}
+
+AddIn xai_string(
+	Function(XLL_LPOPER4, "xll_string", "STRING")
+	.Arguments({
+		Arg(XLL_HANDLEX, "handle", "is a handle to a string."),
+		Arg(XLL_WORD, "_wrap", "is the maximum string length. Default is 255."),
+		})
+	.FunctionHelp("Return a string given a handle.")
+	.Category(CATEGORY)
+);
+LPOPER4 WINAPI xll_string(HANDLEX h, WORD len)
+{
+#pragma XLLEXPORT
+	static OPER4 o;
+
+	handle<std::string> h_(h);
+	if (h_) {
+		o = to_oper(*h_, len);
+	}
+	else {
+		o = ErrNA4;
+	}
+
+	return &o;
+}
 
 AddIn xai_mpz_(
 	Function(XLL_HANDLEX, "xll_mpz_", "\\MPZ")
 	.Arguments({
 		Arg(XLL_LPOPER4, "int", "is an integer as a string or array of strings."),
-		Arg(XLL_LONG, "_base", "is the base. Default is 0."),
+		Arg(XLL_LONG, "_base", "is the base. Default is 10."),
 	})
 	.Uncalced()
 	.Category(CATEGORY)
@@ -69,9 +110,33 @@ AddIn xai_mpz_(
 HANDLEX WINAPI xll_mpz_(const LPOPER4 pstr, LONG base)
 {
 #pragma XLLEXPORT
-	handle<mpz> h(new mpz(to_mpz(*pstr, base)));
+	HANDLEX h = INVALID_HANDLEX;
 
-	return h.get();
+	base = base ? base : 10;
+	if (pstr->is_num()) {
+		handle<mpz> z_(pstr->as_num());
+		if (z_) {
+			handle<mpz> h_(new mpz(*z_));
+			h = h_.get();
+		}
+		else {
+			handle<std::string> s_(pstr->as_num());
+			if (s_) {
+				handle<mpz> h_(new mpz(s_->data(), base));
+				h = h_.get();
+			}
+			else {
+				handle<mpz> h_(new mpz(pstr->as_num()));
+				h = h_.get();
+			}
+		}
+	}
+	else if (pstr->is_str() || pstr->is_multi()) {
+		handle<mpz> h_(new mpz(to_string(*pstr), base));
+		h = h_.get();
+	}
+
+	return h;
 }
 
 AddIn xai_mpz(
@@ -91,10 +156,7 @@ LPOPER4 xll_mpz(HANDLEX h, LONG base)
 
 	handle<mpz> h_(h);
 	if (h_) {
-		if (base == 0) {
-			base = 10;
-		}
-		o = from_mpz(*h_, base);
+		o = to_oper(h_->to_string(base));
 	}
 	else {
 		o = ErrNA4;
@@ -132,13 +194,30 @@ Auto<Open> xao_reg([]() {
 	return TRUE;
 	});
 
-#define mpz_op(op) \
-extern "C" __declspec(dllexport) HANDLEX xll_mpz_##op(HANDLEX h1, HANDLEX h2) \
-{ handle<mpz> h1_(h1); handle<mpz> h2_(h2); if (h1_ and h2_) mpz_##op(*h1_, *h1_, *h2_); else return 0; return h1; }
+// in-place operations
+#define mpx_op(X, OP) \
+extern "C" __declspec(dllexport) HANDLEX xll_mp##X##_##OP(HANDLEX h1, HANDLEX h2) \
+{ handle<mp##X> h1_(h1); handle<mp##X> h2_(h2); \
+  if (h1_ and h2_) mp##X##_##OP(*h1_, *h1_, *h2_); \
+  else return 0; return h1; }
 
-mpz_op(add)
-mpz_op(mul)
-mpz_op(sub)
+// return new object
+#define mpx_op_(X, OP) \
+extern "C" __declspec(dllexport) HANDLEX xll_mp##X##_##OP##_(HANDLEX h1, HANDLEX h2) \
+{ handle<mp##X> h_(new mp##X()); \
+  handle<mp##X> h1_(h1); handle<mp##X> h2_(h2); \
+  if (h1_ and h2_) mp##X##_##OP(*h_, *h1_, *h2_); \
+  else return 0; return h_.get(); }
+
+mpx_op(z, add)
+mpx_op(z, sub)
+mpx_op(z, mul)
+mpx_op(z, div)
+
+mpx_op_(z, add)
+mpx_op_(z, sub)
+mpx_op_(z, mul)
+mpx_op_(z, div)
 
 AddIn xai_mpz_mul_(
 	Function(XLL_HANDLEX, "xll_mpz_mul_", "\\MPZ.MUL")
@@ -150,18 +229,3 @@ AddIn xai_mpz_mul_(
 	.Category(CATEGORY)
 	.FunctionHelp("Return a new handle to mpz1 multiplied by mpz2.")
 );
-HANDLEX xll_mpz_mul_(HANDLEX h1, HANDLEX h2)
-{
-#pragma XLLEXPORT
-	handle<mpz> h_(new mpz());
-	handle<mpz> h1_(h1);
-	handle<mpz> h2_(h2);
-	if (h1_ and h2_) {
-		mpz_mul(*h_, *h1_, *h2_);
-	}
-	else {
-		return 0;
-	}
-
-	return h_.get();
-}

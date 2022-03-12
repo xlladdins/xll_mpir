@@ -23,11 +23,17 @@ inline std::string to_string(const xll::OPER4& o)
 
 }
 // string to one column OPER of strings
-inline xll::OPER4 to_oper(const std::string& s, unsigned len = 255)
+inline xll::OPER4 to_oper(const std::string& s, unsigned len = 0)
 {
 	unsigned n = static_cast<unsigned>(s.length());
-	xll::OPER4 o(1 + (n - 1)/len, 1);
 
+	len = len ? len : 255;
+
+	if (n <= len) {
+		return xll::OPER4(s.data());
+	}
+	
+	xll::OPER4 o(1 + (n - 1)/len, 1);
 	for (unsigned i = 0; i < o.rows(); ++i) {
 		o[i] = xll::OPER4(s.data() + i * len, std::min(n, len));
 		n -= len;
@@ -59,10 +65,14 @@ public:
 	{
 		mpz_init_set_d(z, d);
 	}
-	mpz(const char* str, int base)
+	mpz(const char* str, int base = 0)
 	{
+		base = base ? base : 10;
 		mpz_init_set_str(z, str, base);
 	}
+	mpz(const std::string& str, int base)
+		: mpz(str.c_str(), base)
+	{ }
 	mpz(const mpz& z_)
 	{
 		mpz_init_set(z, z_);
@@ -108,6 +118,15 @@ public:
 		mpz_swap(z, z_);
 	}
 
+	std::string to_string(int base = 0) const
+	{
+		base = base ? base : 10;
+		std::string s(mpz_sizeinbase(z, base) + 2, 0);
+		mpz_get_str(s.data(), base, z);
+
+		return s;
+	}
+
 	// spaceship needs some help
 	bool operator==(const mpz& z_) const { return mpz_cmp(z, z_) == 0; }
 	int operator<=>(const mpz& z_) const { return mpz_cmp(z, z_); }
@@ -124,7 +143,7 @@ inline mpz operator+(mpz z, const mpz& z_) { return z += z_; }
 inline mpz operator-(mpz z, const mpz& z_) { return z -= z_; }
 inline mpz operator*(mpz z, const mpz& z_) { return z *= z_; }
 inline mpz operator/(mpz z, const mpz& z_) { return z /= z_; }
-
+/*
 inline xll::OPER4 from_mpz(const mpz_t& z, int base)
 {
 	std::string s(mpz_sizeinbase(z, base) + 2, 0);
@@ -137,7 +156,7 @@ inline mpz to_mpz(const xll::OPER4& o, int base)
 {
 	return mpz(to_string(o).c_str(), base);
 }
-
+*/
 class mpq {
 	mpq_t q;
 public:

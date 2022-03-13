@@ -165,16 +165,34 @@ LPOPER4 xll_mpz(HANDLEX h, LONG base)
 	return &o;
 }
 
-inline OPER register_mpz_op(const std::string& op, const std::string& help)
+// substitute key-value pairs in o
+inline OPER sub(const OPER& o, const OPER& kv, const OPER& l = "{{", const OPER& r = "}}")
 {
-	std::string cname("_xll_mpz_");
-	cname.append(op);
+	ensure(o.is_str());
+	ensure(kv.columns() == 2);
+	ensure(l.is_str());
+	ensure(r.is_str());
 
-	std::string xlname("MPZ.");
-	xlname.append(op);
-	std::transform(xlname.begin(), xlname.end(), xlname.begin(), [](int c) { return (unsigned char)::toupper(c); });
+	OPER o_(o);
 
-	Args args(XLL_HANDLEX, cname.c_str(), xlname.c_str());
+	for (unsigned i = 0; i < kv.rows(); ++i) {
+		ensure(kv(i, 0).is_str());
+		ensure(kv(i, 1).is_str());
+		OPER k = l & kv(i, 0) & r;
+		OPER v = kv(i, 1);
+		o_ = Excel(xlfSubstitute, o_, k, v);
+	}
+
+	return o_;
+}
+
+inline OPER register_mpz_op(const OPER& kv)
+{
+	OPER4 procedure = sub(OPER("_xll_mp{{X}}{{OP}}"), kv);
+	OPER4 functionText = sub(OPER("MP{{X}}.{{OP}}"), kv);
+	functionText = Excel(xlfUpper, functionText);
+
+	Args args(XLL_HANDLEX, procedure.as_cstr(), functionText.as_cstr());
 	args.Arguments({
 		Arg(XLL_HANDLEX, "mpz1", "is a handle returned by \\MPZ."),
 		Arg(XLL_HANDLEX, "mpz2", "is a handle returned by \\MPZ."),
@@ -186,6 +204,10 @@ inline OPER register_mpz_op(const std::string& op, const std::string& help)
 }
 Auto<Open> xao_reg([]() {
 	OPER o;
+
+	for (const auto& X : OPER({ "z", "q", "f" })) {
+		for (const auto& )
+	}
 
 	o = register_mpz_op("add", "Return mpz1 added to mpz2.");
 	o = register_mpz_op("mul", "Return mpz1 multiplied by mpz2.");

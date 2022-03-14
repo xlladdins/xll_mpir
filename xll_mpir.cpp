@@ -113,27 +113,28 @@ HANDLEX WINAPI xll_mpz_(const LPOPER4 pstr, LONG base)
 	HANDLEX h = INVALID_HANDLEX;
 
 	base = base ? base : 10;
-	if (pstr->is_num()) {
+
+	if (pstr->is_str() or pstr->is_multi()) {
+		handle<mpz> h_(new mpz(to_string(*pstr), base));
+		h = h_.get();
+	}
+	else if (pstr->is_num()) {
 		handle<mpz> z_(pstr->as_num());
-		if (z_) {
+		if (z_) { // mpz handle
 			handle<mpz> h_(new mpz(*z_));
 			h = h_.get();
 		}
 		else {
 			handle<std::string> s_(pstr->as_num());
-			if (s_) {
+			if (s_) { // string handle
 				handle<mpz> h_(new mpz(s_->data(), base));
 				h = h_.get();
 			}
-			else {
+			else { // double
 				handle<mpz> h_(new mpz(pstr->as_num()));
 				h = h_.get();
 			}
 		}
-	}
-	else if (pstr->is_str() || pstr->is_multi()) {
-		handle<mpz> h_(new mpz(to_string(*pstr), base));
-		h = h_.get();
 	}
 
 	return h;
@@ -169,11 +170,12 @@ LPOPER4 xll_mpz(HANDLEX h, LONG base)
 inline OPER sub(const OPER& o, const OPER& kv, const OPER& l = "{{", const OPER& r = "}}")
 {
 	ensure(o.is_str());
-	ensure(kv.columns() == 2);
+	ensure(kv.size() % 2 == 0);
 	ensure(l.is_str());
 	ensure(r.is_str());
 
 	OPER o_(o);
+	o_.resize(o.size() / 2, 2);
 
 	for (unsigned i = 0; i < kv.rows(); ++i) {
 		ensure(kv(i, 0).is_str());
@@ -186,32 +188,32 @@ inline OPER sub(const OPER& o, const OPER& kv, const OPER& l = "{{", const OPER&
 	return o_;
 }
 
-inline OPER register_mpz_op(const OPER& kv)
+inline OPER register_mpx_op(const OPER4& X, const OPER4& OP)
 {
-	OPER4 procedure = sub(OPER("_xll_mp{{X}}{{OP}}"), kv);
-	OPER4 functionText = sub(OPER("MP{{X}}.{{OP}}"), kv);
-	functionText = Excel(xlfUpper, functionText);
+	OPER4 procedure = OPER4("_xll_mp") & X & OPER4("_") & OP;
+	OPER4 functionText = OPER4("MP") & X & OPER4(".") & OP;
+	functionText = Excel4(xlfUpper, functionText);
 
-	Args args(XLL_HANDLEX, procedure.as_cstr(), functionText.as_cstr());
-	args.Arguments({
-		Arg(XLL_HANDLEX, "mpz1", "is a handle returned by \\MPZ."),
-		Arg(XLL_HANDLEX, "mpz2", "is a handle returned by \\MPZ."),
-		});
+	Args args(XLL_HANDLEX, procedure.as_cstr(), functionText.to_string().c_str());
+	auto x1 = X & OPER4("1");
+	auto x2 = X & OPER4("2");
+	Arg arg1(XLL_HANDLEX, x1.as_cstr(), "is a handle.");
+	Arg arg2(XLL_HANDLEX, x2.as_cstr(), "is a handle.");
+	args.Arguments({ arg1, arg2 });
 	args.Category(CATEGORY);
-	args.FunctionHelp(help.c_str());
+	auto help = OPER4("Return ") & OP & OPER4("(") & x1 & OPER4(", ") & x2 & OPER4(").");
+	args.FunctionHelp(help.as_cstr());
 
 	return Register(args);
 }
 Auto<Open> xao_reg([]() {
 	OPER o;
 
-	for (const auto& X : OPER({ "z", "q", "f" })) {
-		for (const auto& )
+	for (const auto& X : { "z", "q", "f" }) {
+		for (const auto& OP : { "add", "sub", "mul", "div" }) {
+			register_mpx_op(OPER4(X), OPER4(OP));
+		}
 	}
-
-	o = register_mpz_op("add", "Return mpz1 added to mpz2.");
-	o = register_mpz_op("mul", "Return mpz1 multiplied by mpz2.");
-	o = register_mpz_op("sub", "Return mpz1 subtracted by mpz2.");
 
 	return TRUE;
 	});
@@ -236,18 +238,17 @@ mpx_op(z, sub)
 mpx_op(z, mul)
 mpx_op(z, div)
 
+mpx_op(q, add)
+mpx_op(q, sub)
+mpx_op(q, mul)
+mpx_op(q, div)
+
+mpx_op(f, add)
+mpx_op(f, sub)
+mpx_op(f, mul)
+mpx_op(f, div)
+
 mpx_op_(z, add)
 mpx_op_(z, sub)
 mpx_op_(z, mul)
 mpx_op_(z, div)
-
-AddIn xai_mpz_mul_(
-	Function(XLL_HANDLEX, "xll_mpz_mul_", "\\MPZ.MUL")
-	.Arguments({
-		Arg(XLL_HANDLEX, "mpz1", "is a handle returned by \\MPZ."),
-		Arg(XLL_HANDLEX, "mpz2", "is a handle returned by \\MPZ."),
-		})
-	.Uncalced()
-	.Category(CATEGORY)
-	.FunctionHelp("Return a new handle to mpz1 multiplied by mpz2.")
-);

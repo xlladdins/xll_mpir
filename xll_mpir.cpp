@@ -55,6 +55,7 @@ int test_mp()
 	return 0;
 }
 int mpz_test = test_mp<mpz>();
+int mpf_test = test_mp<mpf>();
 #endif // _DEBUG
 
 AddIn xai_string_(
@@ -97,6 +98,39 @@ LPOPER4 WINAPI xll_string(HANDLEX h, WORD len)
 	return &o;
 }
 
+template<class MPX>
+HANDLEX xll_mpx_(const LPOPER4 pstr, LONG base)
+{
+	HANDLEX h = INVALID_HANDLEX;
+
+	base = base ? base : 10;
+
+	if (pstr->is_str() or pstr->is_multi()) {
+		handle<MPX> h_(new MPX(to_string(*pstr), base));
+		h = h_.get();
+	}
+	else if (pstr->is_num()) {
+		handle<MPX> z_(pstr->as_num());
+		if (z_) { // MPX handle
+			handle<MPX> h_(new MPX(*z_));
+			h = h_.get();
+		}
+		else {
+			handle<std::string> s_(pstr->as_num());
+			if (s_) { // string handle
+				handle<MPX> h_(new MPX(s_->data(), base));
+				h = h_.get();
+			}
+			else { // double
+				handle<MPX> h_(new MPX(pstr->as_num()));
+				h = h_.get();
+			}
+		}
+	}
+
+	return h;
+}
+
 AddIn xai_mpz_(
 	Function(XLL_HANDLEX, "xll_mpz_", "\\MPZ")
 	.Arguments({
@@ -110,34 +144,28 @@ AddIn xai_mpz_(
 HANDLEX WINAPI xll_mpz_(const LPOPER4 pstr, LONG base)
 {
 #pragma XLLEXPORT
-	HANDLEX h = INVALID_HANDLEX;
+	return xll_mpx_<mpz>(pstr, base);
+}
 
+AddIn xai_mpf_(
+	Function(XLL_HANDLEX, "xll_mpf_", "\\MPF")
+	.Arguments({
+		Arg(XLL_LPOPER4, "float", "is a floating point number as a string or array of strings."),
+		Arg(XLL_LONG, "_base", "is the base. Default is 10."),
+		Arg(XLL_WORD, "_prec", "is the optional precision."),
+		})
+	.Uncalced()
+	.Category(CATEGORY)
+	.FunctionHelp("Return a handle to a mpf_t.")
+);
+HANDLEX WINAPI xll_mpf_(const LPOPER4 pstr, LONG base, WORD prec)
+{
+#pragma XLLEXPORT
 	base = base ? base : 10;
-
-	if (pstr->is_str() or pstr->is_multi()) {
-		handle<mpz> h_(new mpz(to_string(*pstr), base));
-		h = h_.get();
+	if (prec) {
+		mpf_set_default_prec(prec);
 	}
-	else if (pstr->is_num()) {
-		handle<mpz> z_(pstr->as_num());
-		if (z_) { // mpz handle
-			handle<mpz> h_(new mpz(*z_));
-			h = h_.get();
-		}
-		else {
-			handle<std::string> s_(pstr->as_num());
-			if (s_) { // string handle
-				handle<mpz> h_(new mpz(s_->data(), base));
-				h = h_.get();
-			}
-			else { // double
-				handle<mpz> h_(new mpz(pstr->as_num()));
-				h = h_.get();
-			}
-		}
-	}
-
-	return h;
+	return xll_mpx_<mpf>(pstr, base);
 }
 
 AddIn xai_mpz(
@@ -156,6 +184,33 @@ LPOPER4 xll_mpz(HANDLEX h, LONG base)
 	static OPER4 o;
 
 	handle<mpz> h_(h);
+	if (h_) {
+		o = to_oper(h_->to_string(base));
+	}
+	else {
+		o = ErrNA4;
+	}
+
+	return &o;
+}
+
+AddIn xai_mpf(
+	Function(XLL_LPOPER4, "xll_mpf", "MPF")
+	.Arguments({
+		Arg(XLL_HANDLEX, "mpf", "is handle returned by \\MPF."),
+		Arg(XLL_LONG, "_base", "is the optional the base. Default is 0."),
+		})
+	.Uncalced()
+	.Category(CATEGORY)
+	.FunctionHelp("Return mpz as a string of digits in base base.")
+);
+LPOPER4 xll_mpf(HANDLEX h, LONG base)
+{
+#pragma XLLEXPORT
+	static OPER4 o;
+
+	base = base ? base : 10;
+	handle<mpf> h_(h);
 	if (h_) {
 		o = to_oper(h_->to_string(base));
 	}
@@ -206,7 +261,7 @@ inline OPER register_mpx_op(const OPER4& X, const OPER4& OP)
 
 	return Register(args);
 }
-Auto<Open> xao_reg([]() {
+Auto<OpenAfter> xao_reg([]() {
 	OPER o;
 
 	for (const auto& X : { "z", "q", "f" }) {
